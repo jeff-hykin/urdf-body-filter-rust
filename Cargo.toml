@@ -1,0 +1,15 @@
+[package]
+name = "urdf-body-filter"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Cut a robot's own body out of a point cloud: the URDF's collision primitives posed at a joint state, in the sensor's frame, with padding"
+license = "Apache-2.0"
+repository = "https://github.com/jeff-hykin/urdf-body-filter-rust"
+readme = "README.md"
+keywords = ["robotics", "urdf", "pointcloud", "lidar", "self-filter"]
+categories = ["science::robotics"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE"]
+
+[dependencies]
+roxmltree = "0.21"
