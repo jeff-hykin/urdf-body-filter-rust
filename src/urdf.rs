@@ -75,19 +75,27 @@ fn shape(geometry: roxmltree::Node, what: &str) -> Result<Result<Shape, String>,
     let Some(node) = geometry.children().find(|n| n.is_element()) else {
         return Err(Error::Urdf(format!("{what}: empty geometry")));
     };
+    // a negative size would still match points (a sphere's radius + padding squared), a NaN one none: refuse both
+    let size = |value: f64, name: &str| {
+        if value.is_finite() && value >= 0.0 {
+            Ok(value)
+        } else {
+            Err(Error::Urdf(format!("{what}: {name} must be finite and >= 0, got {value}")))
+        }
+    };
     Ok(match node.tag_name().name() {
         "box" => {
             let [x, y, z] = numbers(node.attribute("size"), [f64::NAN; 3], what)?;
-            if [x, y, z].iter().any(|v| !v.is_finite()) {
+            if [x, y, z].iter().any(|v| v.is_nan()) {
                 return Err(Error::Urdf(format!("{what}: box without a size")));
             }
-            Ok(Shape::Box { half: [x / 2.0, y / 2.0, z / 2.0] })
+            Ok(Shape::Box { half: [size(x, "box size")? / 2.0, size(y, "box size")? / 2.0, size(z, "box size")? / 2.0] })
         }
         "cylinder" => Ok(Shape::Cylinder {
-            radius: number(node, "radius", what)?,
-            half_length: number(node, "length", what)? / 2.0,
+            radius: size(number(node, "radius", what)?, "radius")?,
+            half_length: size(number(node, "length", what)?, "length")? / 2.0,
         }),
-        "sphere" => Ok(Shape::Sphere { radius: number(node, "radius", what)? }),
+        "sphere" => Ok(Shape::Sphere { radius: size(number(node, "radius", what)?, "radius")? }),
         other => Err(other.to_string()),
     })
 }
@@ -110,11 +118,17 @@ pub(crate) fn parse(xml: &str) -> Result<Urdf, Error> {
                 shape: shape(geometry, &what)?,
             });
         }
+        if urdf.links.contains(&link) {
+            return Err(Error::Urdf(format!("two links named {link:?}")));
+        }
         urdf.links.push(link);
     }
     for node in robot.children().filter(|n| n.has_tag_name("joint")) {
         let name = node.attribute("name").ok_or_else(|| Error::Urdf("a joint without a name".into()))?.to_string();
         let what = format!("joint {name:?}");
+        if urdf.joints.iter().any(|j| j.name == name) {
+            return Err(Error::Urdf(format!("two joints named {name:?}")));
+        }
         let type_name = node.attribute("type").ok_or_else(|| Error::Urdf(format!("{what}: no type")))?.to_string();
         let kind = match type_name.as_str() {
             "fixed" => JointKind::Fixed,

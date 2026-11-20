@@ -125,3 +125,21 @@ fn transforms_compose_and_invert() {
         assert!((composed[i] - stepwise[i]).abs() < 1e-12);
     }
 }
+
+#[test]
+fn negative_or_nan_sizes_and_repeated_names_are_refused() {
+    let one = |geometry: &str| format!(r#"<robot name="r"><link name="a"><collision><geometry>{geometry}</geometry></collision></link></robot>"#);
+    let load = |xml: &str| Body::from_urdf(xml, &Options { padding_m: 0.0, links: None });
+    assert!(load(&one(r#"<sphere radius="0.5"/>"#)).is_ok());
+    // a radius of -0.5 squared matched every point within 0.5 m, as a 0.5 m sphere would
+    for bad in [r#"<sphere radius="-0.5"/>"#, r#"<cylinder radius="NaN" length="1"/>"#, r#"<cylinder radius="1" length="-1"/>"#, r#"<box size="1 -1 1"/>"#, r#"<box size="1 inf 1"/>"#] {
+        assert!(matches!(load(&one(bad)), Err(Error::Urdf(_))), "{bad}");
+    }
+    // a second link of the same name used to replace the first in the index silently
+    let twice = r#"<robot name="r"><link name="a"/><link name="a"/></robot>"#;
+    assert!(matches!(load(twice), Err(Error::Urdf(why)) if why.contains("two links")));
+    let joints = r#"<robot name="r"><link name="a"/><link name="b"/><link name="c"/>
+        <joint name="j" type="fixed"><parent link="a"/><child link="b"/></joint>
+        <joint name="j" type="fixed"><parent link="a"/><child link="c"/></joint></robot>"#;
+    assert!(matches!(load(joints), Err(Error::Urdf(why)) if why.contains("two joints")));
+}

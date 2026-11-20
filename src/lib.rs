@@ -20,6 +20,8 @@
 //! # Ok::<(), urdf_body_filter::Error>(())
 //! ```
 
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 mod shape;
 mod transform;
 mod urdf;
